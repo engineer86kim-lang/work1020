@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2027년 예산안 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #1a3c6e;
+      --accent: #2563eb;
+      --accent2: #0ea5e9;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #f59e0b;
+      --bg: #f0f4f8;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --new-badge: #7c3aed;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+    header { background:linear-gradient(135deg,var(--primary) 0%,#2d5a9e 100%); color:#fff; padding:28px 40px 20px; box-shadow:0 4px 16px rgba(0,0,0,.25); }
+    header h1 { font-size:1.9rem; font-weight:700; letter-spacing:-.5px; }
+    header p  { margin-top:6px; opacity:.85; font-size:.95rem; }
+
+    #upload-section { background:#fff; border-bottom:1px solid var(--border); padding:14px 40px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    #upload-section label { font-size:.85rem; color:var(--muted); font-weight:600; }
+    #file-input { font-size:.85rem; }
+    #file-status { font-size:.82rem; color:var(--success); font-weight:600; }
+
+    #tab-nav { display:flex; gap:4px; padding:16px 40px 0; flex-wrap:wrap; background:var(--bg); }
+    .tab-btn { padding:8px 16px; border:2px solid var(--border); background:#fff; border-radius:8px 8px 0 0; cursor:pointer; font-size:.82rem; font-weight:600; color:var(--muted); transition:all .2s; white-space:nowrap; }
+    .tab-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .tab-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+    main { padding:0 40px 40px; background:var(--bg); }
+
+    #kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; padding:24px 0 8px; }
+    .kpi-card { background:var(--card); border-radius:12px; padding:20px 22px; box-shadow:0 2px 8px rgba(0,0,0,.07); border-left:5px solid var(--accent); }
+    .kpi-card.danger  { border-left-color:var(--danger); }
+    .kpi-card.success { border-left-color:var(--success); }
+    .kpi-card.warning { border-left-color:var(--warning); }
+    .kpi-card .label { font-size:.78rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-card .value { font-size:2rem; font-weight:800; margin:6px 0 2px; color:var(--primary); }
+    .kpi-card .sub   { font-size:.8rem; color:var(--muted); }
+
+    .section { display:none; }
+    .section.active { display:block; }
+
+    .charts-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:20px; margin-top:20px; }
+    .chart-card { background:var(--card); border-radius:12px; padding:22px; box-shadow:0 2px 8px rgba(0,0,0,.07); }
+    .chart-card h3 { font-size:.95rem; font-weight:700; color:var(--primary); margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid var(--border); }
+    .chart-wrap { position:relative; height:300px; }
+
+    .table-card { background:var(--card); border-radius:12px; padding:22px; box-shadow:0 2px 8px rgba(0,0,0,.07); margin-top:20px; overflow-x:auto; }
+    .table-card h3 { font-size:.95rem; font-weight:700; color:var(--primary); margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid var(--border); }
+    table { width:100%; border-collapse:collapse; font-size:.84rem; }
+    thead tr { background:var(--primary); color:#fff; }
+    thead th { padding:10px 12px; text-align:left; white-space:nowrap; font-weight:600; }
+    tbody tr:nth-child(even) { background:#f8fafc; }
+    tbody tr:hover { background:#e0f2fe; }
+    tbody td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+    .badge-new { display:inline-block; background:var(--new-badge); color:#fff; font-size:.65rem; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px; vertical-align:middle; white-space:nowrap; }
+    .rate-up   { color:var(--danger);    font-weight:700; }
+    .rate-down { color:var(--success);   font-weight:700; }
+    .rate-new  { color:var(--new-badge); font-weight:700; }
+
+    .domain-header { background:var(--card); border-radius:12px; padding:20px 24px; margin-top:20px; box-shadow:0 2px 8px rgba(0,0,0,.07); border-left:6px solid var(--accent); }
+    .domain-header h2 { font-size:1.15rem; font-weight:800; color:var(--primary); }
+    .domain-header p  { margin-top:6px; font-size:.88rem; color:var(--muted); }
+    .project-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; margin-top:16px; }
+    .project-card { background:var(--card); border-radius:10px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,.07); border-top:3px solid var(--accent); display:flex; flex-direction:column; gap:10px; }
+    .project-card.is-new { border-top-color:var(--new-badge); }
+    .project-card .proj-name { font-size:.93rem; font-weight:700; color:var(--primary); }
+    .project-card .proj-meta { display:flex; gap:10px; flex-wrap:wrap; }
+    .meta-item { background:var(--bg); border-radius:6px; padding:5px 10px; font-size:.78rem; color:var(--muted); }
+    .meta-item span { font-weight:700; color:var(--text); }
+    .proj-desc { font-size:.82rem; color:#475569; line-height:1.55; border-top:1px solid var(--border); padding-top:8px; }
+    .gauge-wrap { margin-top:4px; }
+    .gauge-label { display:flex; justify-content:space-between; font-size:.75rem; color:var(--muted); margin-bottom:4px; }
+    .gauge-bar   { height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+    .gauge-fill  { height:100%; border-radius:4px; background:linear-gradient(90deg,var(--accent2),var(--accent)); transition:width .5s; }
+    .gauge-fill.new-fill { background:linear-gradient(90deg,#a855f7,var(--new-badge)); }
+
+    footer { text-align:center; padding:20px; font-size:.78rem; color:var(--muted); border-top:1px solid var(--border); }
+    @media(max-width:700px) { header,#upload-section,#tab-nav,main { padding-left:16px; padding-right:16px; } .charts-row { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📊 2027년 국방 예산안 대시보드</h1>
+  <p>분야별 · 신규사업별 예산 현황 분석 | 2026 → 2027 정부안 비교</p>
+</header>
+
+<div id="upload-section">
+  <label for="file-input">📂 엑셀/CSV 파일 업로드:</label>
+  <input type="file" id="file-input" accept=".xlsx,.xls,.csv" />
+  <span id="file-status">✅ 기본 내장 데이터 표시 중</span>
+</div>
+
+<div id="tab-nav">
+  <button class="tab-btn active" data-tab="overview">🏠 전체 개요</button>
+  <button class="tab-btn" data-tab="domain">📁 분야별 현황</button>
+  <button class="tab-btn" data-tab="new">✨ 신규사업</button>
+  <button class="tab-btn" data-tab="ranking">📈 증가율 순위</button>
+  <button class="tab-btn" data-tab="table">📋 원본 데이터</button>
+</div>
+
+<main>
+  <!-- OVERVIEW -->
+  <div id="tab-overview" class="section active">
+    <div id="kpi-row"></div>
+    <div class="charts-row">
+      <div class="chart-card"><h3>분야별 2027년 예산안 (억원)</h3><div class="chart-wrap"><canvas id="chart-domain-budget"></canvas></div></div>
+      <div class="chart-card"><h3>분야별 증가율 (%)</h3><div class="chart-wrap"><canvas id="chart-domain-rate"></canvas></div></div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card"><h3>2026 vs 2027 예산 비교 (억원)</h3><div class="chart-wrap"><canvas id="chart-compare"></canvas></div></div>
+      <div class="chart-card"><h3>신규사업 vs 기존사업 예산 비중 (2027)</h3><div class="chart-wrap"><canvas id="chart-pie"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- DOMAIN -->
+  <div id="tab-domain" class="section">
+    <div id="domain-selector" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;"></div>
+    <div id="domain-detail"></div>
+  </div>
+
+  <!-- NEW PROJECTS -->
+  <div id="tab-new" class="section">
+    <div id="new-projects-container" style="margin-top:20px;"></div>
+  </div>
+
+  <!-- RANKING -->
+  <div id="tab-ranking" class="section">
+    <div class="charts-row" style="margin-top:20px;">
+      <div class="chart-card"><h3>증가율 TOP 10 사업 (%)</h3><div class="chart-wrap" style="height:380px;"><canvas id="chart-rank-rate"></canvas></div></div>
+      <div class="chart-card"><h3>증감액 TOP 10 사업 (억원)</h3><div class="chart-wrap" style="height:380px;"><canvas id="chart-rank-amount"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div id="tab-table" class="section">
+    <div class="table-card" style="margin-top:20px;">
+      <h3>원본 데이터 전체</h3>
+      <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">
+        <input type="text" id="search-input" placeholder="🔍 검색어 입력…" style="padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;width:260px;" />
+        <span id="search-count" style="font-size:.82rem;color:var(--muted);"></span>
+      </div>
+      <div id="table-container"></div>
+    </div>
+  </div>
+</main>
+
+<footer>2027년 국방부 예산안 대시보드 | 엑셀/CSV 파일 업로드로 데이터를 교체할 수 있습니다</footer>
+
+<script>
+/* ============================================================
+   COLORS & DEFAULT DATA
+   ============================================================ */
+const DOMAIN_COLORS = ['#1d4ed8','#0891b2','#16a34a','#ea580c','#7c3aed','#be123c','#0f766e','#b45309'];
+
+const DEFAULT_DATA = [
+  {no:1,  domain:'① 자주국방 & 전작권 전환',        project:'전작권 전환 및 자주국방 핵심전력 확보',   unit:'억원', a2026:90222,  b2027:121744, diff:31522,  rate:0.3494, isNew:false, desc:'전작권 전환 및 자주국방 예산 34.9% 대폭 증액 (KF-21 양산, 핵추진잠수함 착수, L-SAM 등)'},
+  {no:2,  domain:'② 효율적 군 인력구조 전환',        project:'상비예비군 운영 예산',                   unit:'억원', a2026:87,     b2027:256,    diff:169,    rate:1.9425, isNew:false, desc:'평시 추가훈련을 통한 전시 즉각 전투력 발휘 보장 (+169억원 증액)'},
+  {no:3,  domain:'② 효율적 군 인력구조 전환',        project:'예비군 훈련비 총예산',                   unit:'억원', a2026:688,    b2027:903,    diff:215,    rate:0.3125, isNew:false, desc:"'30년까지 최저시급 수준 지급 목표 단계적 인상 (+215억원, +31.3%)"},
+  {no:4,  domain:'③ AI·유무인 복합체계(MUM-T)',      project:'AI·유무인 복합체계 총예산',              unit:'억원', a2026:4968,   b2027:7727,   diff:2759,   rate:0.5554, isNew:false, desc:'첨단 유·무인 복합체계 전환 집중 투자 (+2,759억원, +55.5%)'},
+  {no:5,  domain:'③ AI·유무인 복합체계(MUM-T)',      project:'피지컬 AI 실증사업',                     unit:'억원', a2026:0,      b2027:430,    diff:430,    rate:null,   isNew:true,  desc:'[신규 430억원] 수송·주둔지 경계·위험물 취급 등 병력절감 효과 큰 분야 실증'},
+  {no:6,  domain:'④ 드론 / 대드론 역량강화',         project:'드론·대드론 역량강화 예산',              unit:'억원', a2026:6788,   b2027:8061,   diff:1273,   rate:0.1875, isNew:false, desc:'공격형 드론 확충 및 다층 대드론 방어체계 고도화 (+1,273억원, +18.8%)'},
+  {no:7,  domain:'④ 드론 / 대드론 역량강화',         project:'50만 드론전사 양성 교육훈련',            unit:'억원', a2026:296,    b2027:771,    diff:475,    rate:1.6047, isNew:false, desc:'교육용 상용드론, 시뮬레이터 및 대드론 교육장비 대폭 확충 (+475억원, +160.5%)'},
+  {no:8,  domain:'⑤ 장병 복무여건 & 간부 처우',      project:'부사관 단기복무장려금 총예산',           unit:'억원', a2026:531.5,  b2027:1152,   diff:620.5,  rate:1.1675, isNew:false, desc:'지원 인원 확대 및 단가 인상 반영 (+620.5억원, +116.7%)'},
+  {no:9,  domain:'⑤ 장병 복무여건 & 간부 처우',      project:'단기복무 부사관 적금 매칭지원금',        unit:'억원', a2026:0,      b2027:189,    diff:189,    rate:null,   isNew:true,  desc:'[신규 189억원] 기술집약형 부사관 육성, 월 최대 30만원(3년 만기) 정부 매칭'},
+  {no:10, domain:'⑤ 장병 복무여건 & 간부 처우',      project:'간부 전세자금 지원단가 (관사 기준)',     unit:'억원', a2026:2.11,   b2027:2.24,   diff:0.13,   rate:0.0616, isNew:false, desc:'중위 전세가의 84% 수준으로 인상 (+6.2%)'},
+  {no:11, domain:'⑤ 장병 복무여건 & 간부 처우',      project:'간부숙소 미입주자 전세자금 지원',        unit:'억원', a2026:0,      b2027:1.05,   diff:1.05,   rate:null,   isNew:true,  desc:'[신규 지원] 숙소 미배정 간부 1,054명 대상 전세자금 신규 지원'},
+  {no:12, domain:'⑤ 장병 복무여건 & 간부 처우',      project:'병사 단체상해보험 도입',                 unit:'억원', a2026:0,      b2027:69,     diff:69,     rate:null,   isNew:true,  desc:"[신규 69억원] 군 복무 중 부상 시 합당한 보상을 위한 단체보험 ('27년 하반기)"},
+  {no:13, domain:'⑥ 미래 국방기술 주권 확보',        project:'국방반도체 R&D 기술개발',                unit:'억원', a2026:132,    b2027:565,    diff:433,    rate:3.2803, isNew:true,  desc:'[신규 R&D 565억원] 국방반도체법 시행에 따른 무기체계 맞춤형 반도체 자립'},
+  {no:14, domain:'⑥ 미래 국방기술 주권 확보',        project:'한국형 첨단항공추진체계(엔진)',          unit:'억원', a2026:0,      b2027:90,     diff:90,     rate:null,   isNew:true,  desc:'[신규 90억원] 무인전투기용 엔진(20억) + 첨단엔진 기반기술(70억)'},
+  {no:15, domain:'⑥ 미래 국방기술 주권 확보',        project:'고출력 레이저 하드킬 기술',              unit:'억원', a2026:0,      b2027:121,    diff:121,    rate:null,   isNew:true,  desc:'[신규 121억원] 첨단 지향성에너지 하드킬 요격 핵심기술 확보'},
+  {no:16, domain:'⑦ 방산 생태계 & 중소기업 육성',    project:'K-방산 스타트업 발굴·육성',             unit:'억원', a2026:54,     b2027:124,    diff:70,     rate:1.2963, isNew:false, desc:'민간 혁신 기술기업의 방산 진입 전주기 패키지 지원 확대 (+129.6%)'},
+  {no:17, domain:'⑦ 방산 생태계 & 중소기업 육성',    project:'방산혁신기업 지원 예산',                 unit:'억원', a2026:659,    b2027:758,    diff:99,     rate:0.1502, isNew:false, desc:'첨단 전략산업 개편 및 방산혁신기업 100개 → 200개로 확대 (+15.0%)'},
+  {no:18, domain:'⑦ 방산 생태계 & 중소기업 육성',    project:'중소기업 기술 軍 실증시험 지원',         unit:'억원', a2026:78,     b2027:174,    diff:96,     rate:1.2308, isNew:false, desc:'중소기업 개발품의 군 환경 실증 및 성능검증 대폭 확대 (+123.1%)'},
+  {no:19, domain:'⑦ 방산 생태계 & 중소기업 육성',    project:'중소기업 수출 패키지 지원',              unit:'억원', a2026:512,    b2027:627,    diff:115,    rate:0.2246, isNew:false, desc:'해외 시장 개척, 마케팅, 글로벌 공급망 진입 패키지 지원 (+22.5%)'},
+  {no:20, domain:'⑧ 국민체감형 병무서비스',          project:'생성형 AI 병무상담 챗봇 구축',          unit:'억원', a2026:0,      b2027:19,     diff:19,     rate:null,   isNew:true,  desc:'[신규 19억원] RAG 및 AI 에이전트 기반의 24시간 원스톱 맞춤형 행정'},
+  {no:21, domain:'⑧ 국민체감형 병무서비스',          project:'병무청 동원훈련 통합관리시스템',         unit:'억원', a2026:0,      b2027:14,     diff:14,     rate:null,   isNew:true,  desc:'[신규 14억원] 국방부-병무청 이원화된 동원훈련 행정업무 병무청 일원화'},
+  {no:22, domain:'⑧ 국민체감형 병무서비스',          project:'국외체류자 입영·소집 항공여비',          unit:'억원', a2026:0,      b2027:6,      diff:6,      rate:null,   isNew:true,  desc:'[신규 6억원] 재외국민 병역이행 지원을 위한 국내 입국 편도항공료 신규 지원(약 400명)'},
+];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
+let charts = {};
+
+/* ============================================================
+   UTILITY
+   ============================================================ */
+const groupBy = (arr, key) => arr.reduce((acc, item) => { (acc[item[key]] = acc[item[key]] || []).push(item); return acc; }, {});
+const fmt  = (v, d=0) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString('ko-KR', {maximumFractionDigits:d});
+const fmtRate = r => r === null ? '<span class="rate-new">신규</span>' : `<span class="${r>=0?'rate-up':'rate-down'}">${r>=0?'+':''}${(r*100).toFixed(1)}%</span>`;
+const killChart = id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } };
+
+/* ============================================================
+   FILE UPLOAD PARSING
+   ============================================================ */
+document.getElementById('file-input').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1});
+      parseRows(raw, file.name);
+    } catch(err) { alert('파일 파싱 오류: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function parseRows(rows, filename) {
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    if (rows[i].map(c=>String(c||'')).some(c=>c.includes('분야')||c.includes('2026'))) { headerIdx=i; break; }
+  }
+  const headers = rows[headerIdx].map(c=>String(c||'').trim());
+  const col = kws => headers.findIndex(h=>kws.some(k=>h.includes(k)));
+  const iNo=col(['연번','번호']), iDom=col(['분야','영역']), iProj=col(['세부','사업','지표']),
+        iUnit=col(['단위','구분']), iA=col(['2026','(A)']), iB=col(['2027','(B)']),
+        iDiff=col(['증감','B-A']), iRate=col(['증가율','(%)']), iDesc=col(['핵심','내용','보도','근거']);
+
+  const parsed = [];
+  for (let i = headerIdx+1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.every(c=>c===''||c===null||c===undefined)) continue;
+    const domVal=iDom>=0?String(r[iDom]||'').trim():'', projVal=iProj>=0?String(r[iProj]||'').trim():'';
+    if (!domVal && !projVal) continue;
+    const aVal=iA>=0?parseFloat(r[iA])||0:0, bVal=iB>=0?parseFloat(r[iB])||0:0;
+    const dVal=iDiff>=0?parseFloat(r[iDiff])||(bVal-aVal):(bVal-aVal);
+    let rVal=iRate>=0?parseFloat(r[iRate]):null;
+    if (rVal!==null && Math.abs(rVal)>10) rVal=rVal/100;
+    if (rVal===null && aVal>0) rVal=(bVal-aVal)/aVal;
+    parsed.push({no:iNo>=0?(parseInt(r[iNo])||i-headerIdx):(i-headerIdx),domain:domVal||'기타',project:projVal||'-',unit:iUnit>=0?String(r[iUnit]||'억원').trim():'억원',a2026:aVal,b2027:bVal,diff:dVal,rate:aVal===0?null:rVal,isNew:aVal===0&&bVal>0,desc:iDesc>=0?String(r[iDesc]||'').trim():''});
+  }
+  if (!parsed.length) { alert('데이터를 인식하지 못했습니다. 헤더를 확인해 주세요.'); return; }
+  DATA = parsed;
+  document.getElementById('file-status').textContent = `✅ "${filename}" 로드 완료 (${parsed.length}건)`;
+  renderAll();
+}
+
+/* ============================================================
+   RENDER ALL
+   ============================================================ */
+function renderAll() {
+  renderKPI();
+  renderOverviewCharts();
+  renderDomainTab();
+  renderNewProjects();
+  renderRankingCharts();
+  renderTable();
+}
+
+/* ── KPI ── */
+function renderKPI() {
+  const t26=DATA.reduce((s,d)=>s+(d.a2026||0),0), t27=DATA.reduce((s,d)=>s+(d.b2027||0),0);
+  const diff=t27-t26, rate=t26>0?(diff/t26*100):0;
+  const newCnt=DATA.filter(d=>d.isNew).length, newBudget=DATA.filter(d=>d.isNew).reduce((s,d)=>s+d.b2027,0);
+  document.getElementById('kpi-row').innerHTML=`
+    <div class="kpi-card"><div class="label">2027년 정부안 총예산</div><div class="value">${fmt(t27)}</div><div class="sub">억원</div></div>
+    <div class="kpi-card success"><div class="label">2026년 대비 증감액</div><div class="value">+${fmt(diff)}</div><div class="sub">억원 증가</div></div>
+    <div class="kpi-card danger"><div class="label">전체 평균 증가율</div><div class="value">+${rate.toFixed(1)}%</div><div class="sub">전년 대비</div></div>
+    <div class="kpi-card warning"><div class="label">신규사업 건수 / 예산</div><div class="value">${newCnt}건</div><div class="sub">${fmt(newBudget)} 억원</div></div>
+  `;
+}
+
+/* ── Overview Charts ── */
+function renderOverviewCharts() {
+  const byD=groupBy(DATA,'domain'), doms=Object.keys(byD);
+  const b27=doms.map(d=>byD[d].reduce((s,r)=>s+r.b2027,0));
+  const b26=doms.map(d=>byD[d].reduce((s,r)=>s+r.a2026,0));
+  const rates=doms.map((d,i)=>b26[i]>0?((b27[i]-b26[i])/b26[i]*100):null);
+  const sD=doms.map(d=>d.replace(/[①②③④⑤⑥⑦⑧]\s*/,'').substring(0,12));
+
+  const baseOpts={responsive:true,maintainAspectRatio:false};
+
+  killChart('db'); charts['db']=new Chart(document.getElementById('chart-domain-budget').getContext('2d'),{type:'bar',data:{labels:sD,datasets:[{label:'2027 예산(억원)',data:b27,backgroundColor:DOMAIN_COLORS,borderRadius:6}]},options:{...baseOpts,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmt(c.raw)} 억원`}}},scales:{x:{ticks:{font:{size:10},maxRotation:35}},y:{ticks:{callback:v=>fmt(v)}}}}});
+
+  killChart('dr'); charts['dr']=new Chart(document.getElementById('chart-domain-rate').getContext('2d'),{type:'bar',data:{labels:sD,datasets:[{label:'증가율(%)',data:rates.map(r=>r===null?null:parseFloat(r.toFixed(1))),backgroundColor:rates.map(r=>r===null?'#a855f7':r>=0?'#2563eb':'#dc2626'),borderRadius:6}]},options:{...baseOpts,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw===null?' 신규':` +${c.raw}%`}}},scales:{x:{ticks:{font:{size:10},maxRotation:35}},y:{ticks:{callback:v=>v+'%'}}}}});
+
+  killChart('cmp'); charts['cmp']=new Chart(document.getElementById('chart-compare').getContext('2d'),{type:'bar',data:{labels:sD,datasets:[{label:'2026년',data:b26,backgroundColor:'#93c5fd',borderRadius:4},{label:'2027년',data:b27,backgroundColor:'#1d4ed8',borderRadius:4}]},options:{...baseOpts,plugins:{tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)} 억원`}}},scales:{x:{ticks:{font:{size:10},maxRotation:35}},y:{ticks:{callback:v=>fmt(v)}}}}});
+
+  const nB=DATA.filter(d=>d.isNew).reduce((s,d)=>s+d.b2027,0), eB=DATA.filter(d=>!d.isNew).reduce((s,d)=>s+d.b2027,0);
+  killChart('pie'); charts['pie']=new Chart(document.getElementById('chart-pie').getContext('2d'),{type:'doughnut',data:{labels:['기존사업','신규사업'],datasets:[{data:[eB,nB],backgroundColor:['#1d4ed8','#7c3aed'],borderWidth:3,borderColor:'#fff',hoverOffset:8}]},options:{...baseOpts,plugins:{tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.raw)} 억원 (${(c.raw/(eB+nB)*100).toFixed(1)}%)`}}}}});
+}
+
+/* ── Domain Tab ── */
+function renderDomainTab() {
+  const byD=groupBy(DATA,'domain'), doms=Object.keys(byD);
+  const sel=document.getElementById('domain-selector'); sel.innerHTML='';
+  doms.forEach((d,i)=>{
+    const btn=document.createElement('button');
+    btn.textContent=d.replace(/[①②③④⑤⑥⑦⑧]\s*/,'').split(' ').slice(0,3).join(' ');
+    btn.style.cssText=`padding:8px 14px;border:2px solid ${DOMAIN_COLORS[i%8]};border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:700;background:#fff;color:${DOMAIN_COLORS[i%8]};transition:all .2s;`;
+    btn.addEventListener('click',()=>showDomain(d,i,doms));
+    btn.dataset.domain=d; btn.dataset.idx=i;
+    sel.appendChild(btn);
+  });
+  if (doms.length) showDomain(doms[0],0,doms);
+}
+
+function showDomain(domain, colorIdx, doms) {
+  document.querySelectorAll('#domain-selector button').forEach(b=>{
+    const i=parseInt(b.dataset.idx);
+    b.style.background=b.dataset.domain===domain?DOMAIN_COLORS[i%8]:'#fff';
+    b.style.color=b.dataset.domain===domain?'#fff':DOMAIN_COLORS[colorIdx%8];
+  });
+  const items=DATA.filter(d=>d.domain===domain);
+  const t26=items.reduce((s,d)=>s+d.a2026,0), t27=items.reduce((s,d)=>s+d.b2027,0);
+  const diff=t27-t26, rate=t26>0?(diff/t26*100):null;
+  document.getElementById('domain-detail').innerHTML=`
+    <div class="domain-header" style="border-left-color:${DOMAIN_COLORS[colorIdx%8]}">
+      <h2>${domain}</h2>
+      <p>세부사업 ${items.length}건 | 2027 예산합계 ${fmt(t27)} 억원 | 전년 대비 ${rate!==null?'+'+rate.toFixed(1)+'%':'신규'} (증감 ${diff>=0?'+':''}${fmt(diff)} 억원)</p>
+    </div>
+    <div class="project-grid">${items.map(item=>projectCard(item,colorIdx)).join('')}</div>
+  `;
+}
+
+function projectCard(item, ci) {
+  const pct=item.rate!==null?(item.rate*100):null;
+  const bw=item.isNew?100:(pct!==null?Math.min(100,Math.abs(pct)):0);
+  return `<div class="project-card ${item.isNew?'is-new':''}" style="border-top-color:${item.isNew?'#7c3aed':DOMAIN_COLORS[ci%8]}">
+    <div class="proj-name">${item.project}${item.isNew?'<span class="badge-new">신규</span>':''}</div>
+    <div class="proj-meta">
+      <div class="meta-item">2026년 <span>${fmt(item.a2026,2)} ${item.unit}</span></div>
+      <div class="meta-item">2027년 <span>${fmt(item.b2027,2)} ${item.unit}</span></div>
+      <div class="meta-item">증감 <span>${item.diff>=0?'+':''}${fmt(item.diff,2)} ${item.unit}</span></div>
+      <div class="meta-item">증가율 <span>${item.isNew?'신규':'+'+pct.toFixed(1)+'%'}</span></div>
+    </div>
+    <div class="gauge-wrap">
+      <div class="gauge-label"><span>${item.isNew?'신규사업':'예산 증가율'}</span><span>${item.isNew?'+'+fmt(item.b2027)+'억':'+'+pct.toFixed(1)+'%'}</span></div>
+      <div class="gauge-bar"><div class="gauge-fill ${item.isNew?'new-fill':''}" style="width:${bw}%"></div></div>
+    </div>
+    ${item.desc?`<div class="proj-desc">${item.desc}</div>`:''}
+  </div>`;
+}
+
+/* ── New Projects ── */
+function renderNewProjects() {
+  const items=DATA.filter(d=>d.isNew);
+  const c=document.getElementById('new-projects-container');
+  if (!items.length) { c.innerHTML='<p style="color:var(--muted);margin-top:20px;">신규사업 데이터가 없습니다.</p>'; return; }
+  const tot=items.reduce((s,d)=>s+d.b2027,0);
+  c.innerHTML=`
+    <div style="background:var(--card);border-radius:12px;padding:18px 22px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-left:6px solid #7c3aed;">
+      <h2 style="font-size:1.1rem;font-weight:800;color:#7c3aed;">✨ 2027년 신규사업 총 ${items.length}건</h2>
+      <p style="margin-top:4px;color:var(--muted);font-size:.88rem;">신규사업 합계 예산: <strong style="color:var(--text)">${fmt(tot)} 억원</strong></p>
+    </div>
+    <div class="project-grid">${items.map((item,i)=>projectCard(item,i)).join('')}</div>
+  `;
+}
+
+/* ── Ranking Charts ── */
+function renderRankingCharts() {
+  const withR=DATA.filter(d=>d.rate!==null&&d.a2026>0).sort((a,b)=>b.rate-a.rate).slice(0,10);
+  const topD=[...DATA].sort((a,b)=>b.diff-a.diff).slice(0,10);
+  const sn=s=>s.length>14?s.substring(0,14)+'…':s;
+
+  killChart('rr'); charts['rr']=new Chart(document.getElementById('chart-rank-rate').getContext('2d'),{type:'bar',data:{labels:withR.map(d=>sn(d.project)),datasets:[{label:'증가율(%)',data:withR.map(d=>(d.rate*100).toFixed(1)),backgroundColor:withR.map((_,i)=>DOMAIN_COLORS[i%8]),borderRadius:5}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` +${c.raw}%`}}},scales:{x:{ticks:{callback:v=>v+'%'}}}}});
+
+  killChart('ra'); charts['ra']=new Chart(document.getElementById('chart-rank-amount').getContext('2d'),{type:'bar',data:{labels:topD.map(d=>sn(d.project)),datasets:[{label:'증감액(억원)',data:topD.map(d=>d.diff),backgroundColor:topD.map((_,i)=>DOMAIN_COLORS[i%8]),borderRadius:5}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` +${fmt(c.raw)} 억원`}}},scales:{x:{ticks:{callback:v=>fmt(v)}}}}});
+}
+
+/* ── Table ── */
+function renderTable(filter='') {
+  const rows=filter?DATA.filter(d=>Object.values(d).some(v=>String(v).toLowerCase().includes(filter.toLowerCase()))):DATA;
+  document.getElementById('search-count').textContent=`${rows.length} / ${DATA.length} 건`;
+  document.getElementById('table-container').innerHTML=`<table>
+    <thead><tr><th>No</th><th>분야</th><th>세부사업/주요지표</th><th>단위</th><th>2026년(A)</th><th>2027년(B)</th><th>증감(B-A)</th><th>증가율</th><th>핵심내용</th></tr></thead>
+    <tbody>${rows.map(d=>`<tr>
+      <td>${d.no}</td>
+      <td style="font-size:.8rem">${d.domain}</td>
+      <td>${d.project}${d.isNew?'<span class="badge-new">신규</span>':''}</td>
+      <td>${d.unit}</td>
+      <td style="text-align:right">${fmt(d.a2026,2)}</td>
+      <td style="text-align:right;font-weight:700">${fmt(d.b2027,2)}</td>
+      <td style="text-align:right">${d.diff>=0?'+':''}${fmt(d.diff,2)}</td>
+      <td style="text-align:right">${fmtRate(d.rate)}</td>
+      <td style="font-size:.79rem;color:#475569;max-width:320px">${d.desc||'-'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+document.getElementById('search-input').addEventListener('input',function(){ renderTable(this.value.trim()); });
+
+/* ── Tabs ── */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ── INIT ── */
+renderAll();
+</script>
+</body>
+</html>
